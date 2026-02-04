@@ -284,27 +284,70 @@ export default function Campaigns() {
             console.error("Failed to load campaign stats:", err);
         }
     };
-
-    const loadTemplates = async () => { 
-        try { 
-            console.log('🔄 Loading templates...');
-            const res = await API.get('/templates/meta-templates');
+const loadTemplates = async () => { 
+    try { 
+        console.log('🔄 Loading ALL templates from WhatsApp API...');
+        
+        // Use the new endpoint
+        const res = await API.get('/whatsapp/campaign-templates');
+        
+        console.log('📊 API Response:', {
+            success: res.data?.success,
+            total: res.data?.total,
+            metaCount: res.data?.metaCount,
+            localCount: res.data?.localCount
+        });
+        
+        if (res.data && res.data.success && res.data.templates) {
+            // Get ALL templates
+            const allTemplates = res.data.templates || [];
             
-            if (res.data.success) {
-                const templates = res.data.templates;
-                setTemplates(templates);
-                showToast(`Loaded ${templates.length} templates`, 'success');
-            } else {
-                setTemplates([]);
-                showToast(res.data.error || "Failed to load templates", 'error');
-            }
-        } catch (err) { 
-            console.error('❌ Error loading templates:', err);
-            setTemplates([]);
-            showToast("Error loading templates", 'error');
+            console.log(`✅ Loaded ${allTemplates.length} templates:`);
+            console.log(`   📱 Meta templates: ${res.data.metaCount || 0}`);
+            console.log(`   💾 Local templates: ${res.data.localCount || 0}`);
+            
+            // Display first 5 templates in console
+            allTemplates.slice(0, 5).forEach((t, i) => {
+                console.log(`   ${i+1}. ${t.name} (${t.language}) - ${t.metaTemplate ? 'Meta' : 'Local'}`);
+            });
+            
+            setTemplates(allTemplates);
+            showToast(`✅ Loaded ${allTemplates.length} templates (${res.data.metaCount || 0} Meta + ${res.data.localCount || 0} Local)`, 'success');
         } 
-    };
-
+        else {
+            console.error('❌ Unexpected response:', res.data);
+            
+            // Try fallback endpoint
+            try {
+                console.log('🔄 Trying fallback: /whatsapp/templates');
+                const fallbackRes = await API.get('/whatsapp/templates');
+                
+                if (fallbackRes.data && fallbackRes.data.success) {
+                    const templates = fallbackRes.data.templates || [];
+                    setTemplates(templates);
+                    showToast(`✅ Loaded ${templates.length} templates (fallback)`, 'success');
+                } else {
+                    setTemplates([]);
+                    showToast("No templates available", 'error');
+                }
+            } catch (fallbackErr) {
+                console.error('❌ Fallback failed:', fallbackErr);
+                setTemplates([]);
+                showToast("Failed to load templates", 'error');
+            }
+        }
+    } catch (err) { 
+        console.error('❌ Error loading templates:', err);
+        
+        if (err.response) {
+            console.error('Response status:', err.response.status);
+            console.error('Response data:', err.response.data);
+        }
+        
+        setTemplates([]);
+        showToast("Error loading templates. Check console.", 'error');
+    } 
+};
     useEffect(() => {
         loadCampaigns();
         loadTemplates();
@@ -499,9 +542,11 @@ export default function Campaigns() {
             payload.caption = stepForm.caption || "";
         } else if (stepForm.type === "template") {
             if (!stepForm.templateId) return showToast("Select a template", 'error');
+            
+            // ✅ CORRECTED: Template format should be "name::language"
             const [templateName, language] = stepForm.templateId.split("::");
             payload.templateName = templateName;
-            payload.language = language;
+            payload.language = language || 'en_US';
         }
 
         // Add scheduling based on campaign type
@@ -673,7 +718,10 @@ export default function Campaigns() {
     // 3. UI RENDERING
     // ==============================================================================
 
-    const selectedTemplate = templates.find(t => t.id === stepForm.templateId);
+    const selectedTemplate = templates.find(t => 
+        (t._id || t.id) === stepForm.templateId || 
+        `${t.name}::${t.language || 'en_US'}` === stepForm.templateId
+    );
 
     return (
         <div className="flex bg-gray-50 min-h-screen">
@@ -884,11 +932,17 @@ export default function Campaigns() {
                                                             disabled={isCreating}
                                                         >
                                                             <option value="">Select a template...</option>
-                                                            {templates.map(t => (
-                                                                <option key={t.id} value={t.id}>
-                                                                    📄 {t.name} ({t.language})
-                                                                </option>
-                                                            ))}
+                                                           {templates.map(t => (
+    <option 
+        key={t.id || t.name} 
+        value={`${t.name}::${t.language || 'en_US'}`}
+    >
+        {t.metaTemplate ? '📱 ' : '💾 '}
+        {t.displayName || t.name} 
+        ({t.language || 'en_US'})
+        {t.status !== 'APPROVED' ? ` - ${t.status}` : ''}
+    </option>
+))}
                                                         </select>
                                                     </div>
                                                 )}
@@ -1396,11 +1450,16 @@ export default function Campaigns() {
                                                                 >
                                                                     <option value="">-- Select a Template --</option>
                                                                     {templates.map(t => (
-                                                                        <option key={t.id} value={t.id}>
-                                                                            {t.name} ({t.language})
+                                                                        <option key={t._id || t.id} value={`${t.name}::${t.language || 'en_US'}`}>
+                                                                            {t.displayName || t.name} ({t.language || 'en_US'})
                                                                         </option>
                                                                     ))}
                                                                 </select>
+                                                                {stepForm.templateId && (
+                                                                    <p className="text-xs text-gray-500 mt-1">
+                                                                        Selected: {stepForm.templateId.split('::')[0]}
+                                                                    </p>
+                                                                )}
                                                             </div>
                                                         ) : (
                                                             <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
