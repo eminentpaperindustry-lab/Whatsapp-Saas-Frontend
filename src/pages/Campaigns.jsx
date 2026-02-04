@@ -635,7 +635,7 @@ const loadTemplates = async () => {
         setIsTestRunning(true);
         try {
             console.log('🧪 Triggering test for campaign:', selectedCampaign._id);
-            await API.post(`/campaigns/${selectedCampaign._id}/trigger?test=true`);
+            await API.post(`/campaigns/${selectedCampaign._id}/trigger-test`);
             showToast("Test triggered successfully. Check logs for status.");
         } catch (err) {
             console.error("Trigger failed:", err);
