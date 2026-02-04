@@ -123,7 +123,7 @@ const EnhancedChat = () => {
   
   const loadStats = async () => {
     try {
-      const response = await API.get('/chat/stats');
+      const response = await API.get('/whatsapp/chat/stats');
       if (response.data.success) {
         setStats({
           total: response.data.stats.totalSessions || 0,
